@@ -113,6 +113,14 @@ public class Main : MonoBehaviour {
 
         // 観測点データ初期化
         initMFlag(io_flag);
+        insertDataToVector2(xdata, ydata, f_vec);
+        getIODMonitoringPoint(f_vec, m_vec, io_flag);
+        printIODMonitoringPoint(d_img, io_flag);
+
+        // 初回内部外部判定実行
+        f_vec = new ArrayList();
+        d_vec = new ArrayList();
+        
 
         /*     デバッグ用（FPS）     */
         frameCount = 0;
@@ -130,9 +138,6 @@ public class Main : MonoBehaviour {
         // 変数初期化
         f_vec = new ArrayList();
         d_vec = new ArrayList();
-
-        // 観測点データ初期化
-        initMFlag(io_flag);
 
         // カメラ画像の取得
         i_img = cam.getCameraImage();
@@ -152,21 +157,24 @@ public class Main : MonoBehaviour {
         // 画像を初期化（真っ白に）
         initImg(d_img);
 
-        // 図形と観測点の内部外部判定を行う
-        getIODMonitoringPoint(f_vec, m_vec, io_flag);
-
-        // 観測点の内部外部判定結果を描写
-        printIODMonitoringPoint(d_img, io_flag);
-
         // 内部に点がある場合
         if (isInsideOrOutside(io_flag, ps_arr))
         {
             // 図形を移動
             overrideXYData(xdata, ydata, io_flag);
+            
+            // 観測点データ初期化 
+            initMFlag(io_flag);
+
+            // 図形と観測点の内部外部判定を行う
+            getIODMonitoringPoint(f_vec, m_vec, io_flag);
         }
 
         // 図形を描画
         printFigureData(d_img, f_vec);
+
+        // 観測点の内部外部判定結果を描写
+        printIODMonitoringPoint(d_img, io_flag);
 
         // 手情報を描画
         printPointData(d_img, ps_arr);
