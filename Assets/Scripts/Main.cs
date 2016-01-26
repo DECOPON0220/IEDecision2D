@@ -5,26 +5,27 @@ using System.Collections;
 
 public class Main : MonoBehaviour {
     // 変数宣言
-    int[,] ps_arr;                      // データ格納
+    int[,] ps_arr;                      // 物体情報格納
+    int[,] ie_arr;                      // 図形に対して内部外部判定を行った結果を格納（0:外部 1:内部）
     IplImage i_img;                     // IplImage;
     IplImage h_img = new IplImage();    // HSV画像
     Camera cam = new Camera();          // カメラ
     Graphic g = new Graphic();          // 画像編集関係
     Texture2D texture;                  // テクスチャ
     IplImage d_img = new IplImage();    // テクスチャ画像
-    int[] cg_xy;                        // 重心 - 0:X座標 1:Y座標
-    int[] mn_xy;                        // 重心に最も近い点座標 - 0:X座標 1:Y座標
+
     // 図形用
-    int num = 5;
+    int num = 41;            // 角の数
     double[] xdata, ydata;
     // 図形計算用
-    ArrayList f_vec, d_vec;
-    int f_interval = 3;
+    ArrayList f_vec, d_vec, m_vec;  // f_vec:図形 d_vec:物体情報 m_vec:監視点 それぞれ座標を格納する
+    int[,] io_flag;
 
     /*     デバッグ用（FPS）     */
     int frameCount;
     float prevTime;
     /* ------------------------- */
+    int debug;
     
         
 
@@ -43,6 +44,7 @@ public class Main : MonoBehaviour {
         int x_index = x_window / GlobalVar.POINT_INTERVAL;
         int y_index = y_window / GlobalVar.POINT_INTERVAL;
         ps_arr = new int[y_index, x_index];
+        ie_arr = new int[y_index, x_index];
 
         // テクスチャの設定
         d_img = Cv.CreateImage(WINDOW_SIZE, BitDepth.U8, 3);
@@ -50,21 +52,67 @@ public class Main : MonoBehaviour {
         GetComponent<Renderer>().material.mainTexture = texture;
 
         // 図形格納用配列の初期化
-        xdata = new double[num];
-        ydata = new double[num];
-        f_vec = new ArrayList();
-        d_vec  = new ArrayList();
+        xdata   = new double[num];
+        ydata   = new double[num];
+        f_vec   = new ArrayList();
+        d_vec   = new ArrayList();
+        m_vec   = new ArrayList();
+        io_flag = new int[y_index, x_index];    // 外部(遠):0 外部(近):1 内部:2
 
         // 図形の座標を格納
-        xdata[0] = 110; ydata[0] = 170;
-        xdata[1] = 110; ydata[1] = 70;
-        xdata[2] = 210; ydata[2] = 70;
-        xdata[3] = 210; ydata[3] = 170;
-        xdata[4] = 110; ydata[4] = 170;
+        xdata[0] = 100; ydata[0] = 170;
+        xdata[1] = 92;  ydata[1] = 165;
+        xdata[2] = 90;  ydata[2] = 160;
+        xdata[3] = 92;  ydata[3] = 155;
+        xdata[4] = 100; ydata[4] = 150;
 
-        // 図形の重心
-        cg_xy = new int[2];
-        mn_xy = new int[2];
+        xdata[5] = 115;  ydata[5] = 150;
+        xdata[6] = 135;  ydata[6] = 147;
+        xdata[7] = 155;  ydata[7] = 141;
+        xdata[8] = 170;  ydata[8] = 132;
+        xdata[9] = 175;  ydata[9] = 120;
+        xdata[10] = 170; ydata[10] = 108;
+        xdata[11] = 155; ydata[11] = 99;
+        xdata[12] = 135; ydata[12] = 93;
+        xdata[13] = 115; ydata[13] = 90;
+
+        xdata[14] = 100; ydata[14] = 90;
+        xdata[15] = 92;  ydata[15] = 85;
+        xdata[16] = 90;  ydata[16] = 80;
+        xdata[17] = 92;  ydata[17] = 75;
+        xdata[18] = 100; ydata[18] = 70;
+
+        xdata[19] = 115; ydata[19] = 63;
+        xdata[20] = 130; ydata[20] = 57;
+        xdata[21] = 145; ydata[21] = 54;
+        xdata[22] = 160; ydata[22] = 53;
+        xdata[23] = 175; ydata[23] = 54;
+        xdata[24] = 190; ydata[24] = 57;
+        xdata[25] = 205; ydata[25] = 65;
+        xdata[26] = 220; ydata[26] = 75;
+
+        xdata[27] = 230; ydata[27] = 90;
+        xdata[28] = 235; ydata[28] = 107;
+        xdata[29] = 237; ydata[29] = 120;
+        xdata[30] = 235; ydata[30] = 133;
+        xdata[31] = 230; ydata[31] = 150;
+
+        xdata[32] = 220; ydata[32] = 165;
+        xdata[33] = 205; ydata[33] = 175;
+        xdata[34] = 190; ydata[34] = 183;
+        xdata[35] = 175; ydata[35] = 186;
+        xdata[36] = 160; ydata[36] = 187;
+        xdata[37] = 145; ydata[37] = 186;
+        xdata[38] = 130; ydata[38] = 183;
+        xdata[39] = 115; ydata[39] = 177;
+
+        xdata[40] = 100; ydata[40] = 170;
+      
+        // 観測点の座標を配列に格納
+        insertDataToVector3(m_vec);
+
+        // 観測点データ初期化
+        initMFlag(io_flag);
 
         /*     デバッグ用（FPS）     */
         frameCount = 0;
@@ -82,7 +130,9 @@ public class Main : MonoBehaviour {
         // 変数初期化
         f_vec = new ArrayList();
         d_vec = new ArrayList();
-        mn_xy = new int[2];
+
+        // 観測点データ初期化
+        initMFlag(io_flag);
 
         // カメラ画像の取得
         i_img = cam.getCameraImage();
@@ -96,47 +146,32 @@ public class Main : MonoBehaviour {
         // カメラ画像の任意の点からデータ取得
         g.getPointData(h_img, ps_arr);
 
-        // 点データを配列に格納
-        insertDataToVector1(ps_arr, d_vec);
-
         // 図形の座標を配列に格納
         insertDataToVector2(xdata, ydata, f_vec);
-
-        // 図形の重心を配列に格納
-        getCenterDot(f_vec, cg_xy);
 
         // 画像を初期化（真っ白に）
         initImg(d_img);
 
-        /*-------------------------------*/
-        /*     デバッグ用（重心を表示）  */
-        /*-------------------------------*/
-        printCenterDot(d_img, cg_xy);
+        // 図形と観測点の内部外部判定を行う
+        getIODMonitoringPoint(f_vec, m_vec, io_flag);
+
+        // 観測点の内部外部判定結果を描写
+        printIODMonitoringPoint(d_img, io_flag);
 
         // 内部に点がある場合
-        if (isInsideOrOutside(f_vec, d_vec))
+        if (isInsideOrOutside(io_flag, ps_arr))
         {
-            //Debug.Log("debug");
-
-            // 重心に一番近い手座標を配列に格納
-            getNearCenterDot(d_vec, cg_xy, mn_xy);
-
-            // 重心に一番近い手座標を参考にして、図形を動かす
-            moveFigure(xdata, ydata, cg_xy, mn_xy);
+            // 図形を移動
+            overrideXYData(xdata, ydata, io_flag);
         }
 
         // 図形を描画
-        printVectorData(d_img, f_vec);
+        printFigureData(d_img, f_vec);
 
         // 手情報を描画
         printPointData(d_img, ps_arr);
 
-        // 重心に一番近い座標を表示
-        printNearCenterDot(d_img, mn_xy);
-
-        /*---------------------------------------*/
-        /*     デバッグ用（点情報表示）          */
-        /*---------------------------------------*/
+        // テクスチャ表示
         using (var r_img = Cv2.CvArrToMat(d_img))
         {
             texture.LoadImage(r_img.ImEncode(".jpeg"));
@@ -154,238 +189,38 @@ public class Main : MonoBehaviour {
         /* ------------------------- */
     }
 
-    // 斜めには動かない
-    private void moveFigure(double[] x, double[] y, int[] xy1, int[] xy2)
-    {
-        int l_x, l_y;
-        int f_xy; // 1:x 2:y
-
-        l_x = xy2[0] - xy1[0];
-        l_y = xy2[1] - xy1[1];
-
-        // XYどちらに移動するか判定
-        if (Mathf.Abs((float)l_x) > Mathf.Abs((float)l_y))
-        {
-            f_xy = 1;
-        }
-        else
-        {
-            f_xy = 2;
-        }
-
-        // X方向に移動
-        if (f_xy == 1)
-        {
-            if (l_x > 0)
-            {
-                for (int i = 0; i < x.Length; i++)
-                {
-                    x[i] -= 1;
-                }
-            }
-            else
-            {
-                for (int i = 0; i < x.Length; i++)
-                {
-                    x[i] += 1;
-                }
-            }
-        }
-        // Y方向に移動
-        else if (f_xy == 2)
-        {
-            if (l_y > 0)
-            {
-                for (int i = 0; i < y.Length; i++)
-                {
-                    y[i] -= 1;
-                }
-            }
-            else
-            {
-                for (int i = 0; i < y.Length; i++)
-                {
-                    y[i] += 1;
-                }
-            }
-        }
-
-        return ;
-    }
-
-    private int[] getNearCenterDot(ArrayList v, int[] xy1,int[] xy2)
-    {
-        float d = 100.0f;
-        float t_d = 100.0f;
-
-        //Debug.Log(v.Count);
-        for (int i = 0; i < v.Count; i++)
-        {
-            Complex d_com = (Complex)v[i];
-
-            d = Mathf.Sqrt(Mathf.Pow((float)(d_com.x-xy1[0]),2) + Mathf.Pow((float)(d_com.y-xy1[1]),2));
-
-            if (t_d > d)
-            {
-                t_d = d;
-                xy2[0] = (int)d_com.x;
-                xy2[1] = (int)d_com.y;
-            }
-        }
-
-        //Debug.LogFormat("d:{0} t_d:{1}, xy2[0]:{2} xy2[1]:{3}", d, t_d, xy2[0], xy2[1]);
-
-        return xy2;
-    }
-
-    private int[] getCenterDot(ArrayList v, int[] xy)
-    {
-        double t_x = 0;
-        double t_y = 0;
-
-        for (int i = 0; i < v.Count - 1; i++)
-        {
-            Complex f_com = (Complex)v[i];
-            t_x += f_com.x;
-            t_y += f_com.y;
-        }
-
-        xy[0] = (int)(t_x / (v.Count - 1));
-        xy[1] = (int)(t_y / (v.Count - 1));
-
-        return cg_xy;
-    }
-
-    private bool isInsideOrOutside(ArrayList f_v, ArrayList d_v)
-    {
-        for (int i = 0; i < d_v.Count; i++)
-        {
-            Complex d_com = (Complex)d_v[i];  // 図形
-
-            // 手
-            for (int j = 0; j < f_v.Count - 1; j++)
-            {
-                Complex f_com1 = (Complex)f_v[j];
-                Complex f_com2 = (Complex)f_v[j + 1];
-                Complex sub1 = f_com1.sub(d_com);
-                Complex sub2 = f_com2.sub(f_com1);
-
-                double ch3 = Mathf.Sqrt(Mathf.Pow((float)sub1.x, 2) + Mathf.Pow((float)sub1.y, 2));
-
-                if (ch3 < 20)
-                {
-                    double ch4 = sub1.x * sub2.y - sub1.y * sub2.x;
-                    if (ch4 >= 0)
-                    {
-                        //近くの外
-                        //printSDot(d_img, (int)(com.x) - 1, (int)(com.y) - 1, 1);
-                        //flag[k] = 1;
-                    }
-                    else {
-                        //近くの内
-                        //printSDot(d_img, (int)(com.x) - 1, (int)(com.y) - 1, 2);
-                        //flag[k] = 2;
-                        return true;
-                    }
-                    break;
-                }
-            }
-        }
-
-        return false;
-    }
-
     /*
-    private bool isInsideOrOutside(ArrayList f_v, ArrayList d_v)
+    private bool isMovableFigure(double[] x, double[] y)
     {
-        for (int i = 0; i < f_v.Count; i++)
+        int m_y = GlobalVar.CAMERA_HEIGHT / GlobalVar.POINT_INTERVAL;
+        int m_x = GlobalVar.CAMERA_WIDTH / GlobalVar.POINT_INTERVAL;
+
+        for (int i = 0; i < m_x; i++)
         {
-            Complex f_com = (Complex)f_v[i];  // 図形
-            
-            // 手
-            for (int j = 0; j < d_v.Count - 1; j++)
+            if (x[i] < 5 || x[i] > GlobalVar.CAMERA_WIDTH - 5)
             {
-                Complex d_com1 = (Complex)d_v[j];
-                Complex d_com2 = (Complex)d_v[j+1];
-                Complex sub1 = d_com1.sub(f_com);
-                Complex sub2 = d_com2.sub(d_com1);
-
-                double ch3 = Mathf.Sqrt(Mathf.Pow((float)sub1.x, 2) + Mathf.Pow((float)sub1.y, 2));
-
-                if (ch3 < 10)
-                {
-                    double ch4 = sub1.x * sub2.y - sub1.y * sub2.x;
-                    if (ch4 >= 0)
-                    {
-                        //近くの外
-                        //printSDot(d_img, (int)(com.x) - 1, (int)(com.y) - 1, 1);
-                        //flag[k] = 1;
-                    }
-                    else {
-                        //近くの内
-                        //printSDot(d_img, (int)(com.x) - 1, (int)(com.y) - 1, 2);
-                        //flag[k] = 2;
-                        return true;
-                    }
-                    break;
-                }
+                return false;
             }
         }
 
-        return false;
+        for (int i = 0; i < m_y; i++)
+        {
+            if (y[i] < 5 || y[i] > GlobalVar.CAMERA_HEIGHT - 5)
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
     */
 
-    private ArrayList insertDataToVector1(int[,] arr, ArrayList v)
-    {
-        for (int y = 0; y < GlobalVar.CAMERA_HEIGHT / GlobalVar.POINT_INTERVAL; y++)
-        {
-            for (int x = 0; x < GlobalVar.CAMERA_WIDTH / GlobalVar.POINT_INTERVAL; x++)
-            {
-                if (arr[y, x] == 1)
-                {
-                    v.Add(new Complex(x * GlobalVar.POINT_INTERVAL, y * GlobalVar.POINT_INTERVAL));
-                }
-            }
-        }
-
-        return v;
-    }
-
-    private ArrayList insertDataToVector2(double[] xdata, double[] ydata, ArrayList v)
-    {
-        for (int i = 0; i < num - 1; i++)
-        {
-            // 二点間の距離を取得
-            int d = (int)Mathf.Sqrt(Mathf.Pow((float)xdata[i + 1] - (float)xdata[i], 2)
-                                  + Mathf.Pow((float)ydata[i + 1] - (float)ydata[i], 2));
-            // 各角間の座標生成
-            for (int j = 0; j < d / f_interval; j++)
-            {
-                double gx = f_interval * j * (xdata[i + 1] - xdata[i]) / d + xdata[i];
-                double gy = f_interval * j * (ydata[i + 1] - ydata[i]) / d + ydata[i];
-
-                // 配列に格納
-                v.Add(new Complex(gx, gy));
-            }
-        }
-
-        return v;
-    }
-
-    /*
-    private ArrayList insertDataToVector3(double[] xdata, double[] ydata, ArrayList v)
-    {
-        // 配列に格納
-        for (int i = 0; i < num; i++)
-        {
-            v.Add(new Complex(xdata[i], ydata[i]));
-        }
-
-        return v;
-    }
-    */
-
+    //---------------------------------------------------------
+    // 関数名 : initImg
+    // 機能   : 画像を初期化
+    // 引数   : img/画像
+    // 戻り値 : img/画像
+    //---------------------------------------------------------
     unsafe private IplImage initImg(IplImage img)
     {
         int index;
@@ -406,12 +241,346 @@ public class Main : MonoBehaviour {
         return img;
     }
 
-    unsafe private IplImage printVectorData(IplImage img, ArrayList v)
+    //---------------------------------------------------------
+    // 関数名 : initMFlag
+    // 機能   : 観測点からのデータを初期化する
+    // 引数   : flag/観測点の内部外部値
+    // 戻り値 : flag/観測点の内部外部値
+    //---------------------------------------------------------
+    private int[,] initMFlag(int[,] flag)
+    {
+        int m_y = GlobalVar.CAMERA_HEIGHT / GlobalVar.POINT_INTERVAL;
+        int m_x = GlobalVar.CAMERA_WIDTH / GlobalVar.POINT_INTERVAL;
+
+        for (int y = 0; y < m_y; y++)
+        {
+            for (int x = 0; x < m_x; x++)
+            {
+                flag[y, x] = 0;
+            }
+        }
+
+        return flag;
+    }
+
+    //---------------------------------------------------------
+    // 関数名 : getIODMonitoringPoint
+    // 機能   : 図形に対しての、全ての観測点における内部外部判定値を格納
+    // 引数   : f_v/図形座標 m_v/観測点座標 flag/観測点の内部外部値
+    // 戻り値 : flag/観測点の内部外部値
+    //---------------------------------------------------------
+    private int[,] getIODMonitoringPoint(ArrayList f_v, ArrayList m_v, int[,] flag)
+    {
+        for (int i = 0; i < m_v.Count; i++)
+        {
+            Complex m_com = (Complex)m_v[i];
+
+            for (int j = 0; j < f_v.Count - 1; j++)
+            {
+                Complex f_com1 = (Complex)f_v[j];
+                Complex f_com2 = (Complex)f_v[j + 1];
+                Complex sub1 = f_com1.sub(m_com);
+                Complex sub2 = f_com2.sub(f_com1);
+
+                double ch3 = Mathf.Sqrt(Mathf.Pow((float)sub1.x, 2) + Mathf.Pow((float)sub1.y, 2));
+
+                if (ch3 < 20)
+                {
+                    double ch4 = sub1.x * sub2.y - sub1.y * sub2.x;
+                    if (ch4 >= 0)
+                    {
+                        flag[i / 32, i % 32] = 1;
+                    }
+                    else {
+                        flag[i /32, i % 32] = 2;
+                    }
+                    break;
+                }
+            }
+        }
+
+        // 補完
+        completionIOFlag(flag);
+
+
+        return flag;
+    }
+
+    //---------------------------------------------------------
+    // 関数名 : overrideXYData
+    // 機能   : 物体情報との内部外部判定結果から、図形のXYデータを書き換える
+    // 引数   : x/図形のXデータ y/図形のYデータ flag/観測点の内部外部値
+    // 戻り値 : なし
+    //---------------------------------------------------------
+    private void overrideXYData(double[] x, double[] y, int[,] flag)
+    {
+        int m_y = GlobalVar.CAMERA_HEIGHT / GlobalVar.POINT_INTERVAL;
+        int m_x = GlobalVar.CAMERA_WIDTH / GlobalVar.POINT_INTERVAL;
+
+        Debug.Log(x[0]);
+
+        for (int t_y = 0; t_y < m_y; t_y++)
+        {
+            for (int t_x = 0; t_x < m_x; t_x++)
+            {
+                if (flag[t_y, t_x] == 3 &&
+                    t_x != 0 && t_x != m_x &&
+                    t_y != 0 && t_y != m_y)
+                {
+                    // 3の周辺の情報を調べる
+                    if (flag[t_y - 1, t_x] == 1)
+                    {
+                        // 図形が端まで達しているときは移動しない
+                        for (int i = 0; i < num; i++)
+                        {
+                            if (y[i] < 10)
+                            {
+                                return;
+                            }
+                        }
+
+                        for (int i = 0; i < num; i++)
+                        {
+                            y[i] = y[i] - 3;
+                        }
+                    }
+                    else if (flag[t_y + 1, t_x] == 1)
+                    {
+                        // 図形が端まで達しているときは移動しない
+                        for (int i = 0; i < num; i++)
+                        {
+                            if (y[i] > GlobalVar.CAMERA_HEIGHT - 10)
+                            {
+                                return;
+                            }
+                        }
+
+                        for (int i = 0; i < num; i++)
+                        {
+                            y[i] = y[i] + 3;
+                        }
+                    }
+                    if (flag[t_y, t_x - 1] == 1)
+                    {
+                        // 図形が端まで達しているときは移動しない
+                        for (int i = 0; i < num; i++)
+                        {
+                            if (x[i] > GlobalVar.CAMERA_WIDTH - 10)
+                            {
+                                return;
+                            }
+                        }
+
+                        for (int i = 0; i < num; i++)
+                        {
+                            x[i] = x[i] + 3;
+                        }
+                    }
+                    else if (flag[t_y, t_x + 1] == 1)
+                    {
+                        // 図形が端まで達しているときは移動しない
+                        for (int i = 0; i < num; i++)
+                        {
+                            if (x[i] < 10)
+                            {
+                                return;
+                            }
+                        }
+
+                        for (int i = 0; i < num; i++)
+                        {
+                            x[i] = x[i] - 3;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    //---------------------------------------------------------
+    // 関数名 : completionIOFlag
+    // 機能   : 図形に対する内部判定(近)から内部判定(遠)を補完する
+    // 引数   : flag/観測点の内部外部値
+    // 戻り値 : flag/観測点の内部外部値
+    //---------------------------------------------------------
+    private int[,] completionIOFlag(int[,] flag)
+    {
+        int m_x = GlobalVar.CAMERA_WIDTH / GlobalVar.POINT_INTERVAL;
+        int m_y = GlobalVar.CAMERA_HEIGHT / GlobalVar.POINT_INTERVAL;
+
+        for (int y = 0; y < m_y; y++)
+        {
+            for (int x = 0; x < m_x; x++)
+            {
+                if (x != 0 && y != 0) {
+                    if (flag[y, x] == 0 && flag[y, x - 1] == 2)
+                    {
+                        flag[y, x] = 2;
+                    }
+                }
+            }
+        }
+
+        return flag;
+    }
+
+    /*
+    private ArrayList insertDataToVector1(int[,] arr, ArrayList v)
+    {
+        for (int y = 0; y < GlobalVar.CAMERA_HEIGHT / GlobalVar.POINT_INTERVAL; y++)
+        {
+            for (int x = 0; x < GlobalVar.CAMERA_WIDTH / GlobalVar.POINT_INTERVAL; x++)
+            {
+                if (arr[y, x] == 1)
+                {
+                    v.Add(new Complex(x * GlobalVar.POINT_INTERVAL, y * GlobalVar.POINT_INTERVAL));
+                }
+            }
+        }
+
+        return v;
+    }
+    */
+
+    //---------------------------------------------------------
+    // 関数名 : insertDataToVector2
+    // 機能   : 図形データを一つの配列に統合
+    // 引数   : xdata/X座標 ydata/Y座標 v/配列
+    // 戻り値 : v/配列
+    //---------------------------------------------------------
+    private ArrayList insertDataToVector2(double[] xdata, double[] ydata, ArrayList v)
+    {
+        for (int i = 0; i < num - 1; i++)
+        {
+            // 配列に格納
+            v.Add(new Complex(xdata[i], GlobalVar.CAMERA_HEIGHT - ydata[i]));
+        }
+
+        return v;
+    }
+
+    //---------------------------------------------------------
+    // 関数名 : insertDataToVector3
+    // 機能   : 観測点の座標を配列に格納
+    // 引数   : v/配列
+    // 戻り値 : v/配列
+    //---------------------------------------------------------
+    private ArrayList insertDataToVector3(ArrayList v)
+    {
+        int m_x, m_y, t_x, t_y;
+        m_x = GlobalVar.CAMERA_WIDTH / GlobalVar.POINT_INTERVAL;
+        m_y = GlobalVar.CAMERA_HEIGHT / GlobalVar.POINT_INTERVAL;
+
+        for (int y = 0; y < m_y; y++)
+        {
+            for (int x = 0; x < m_x; x++)
+            {
+                t_x = x * GlobalVar.POINT_INTERVAL + (GlobalVar.POINT_INTERVAL / 2);
+                t_y = y * GlobalVar.POINT_INTERVAL + (GlobalVar.POINT_INTERVAL / 2);
+
+                v.Add(new Complex(t_x, t_y));
+            }
+        }
+
+        return v;
+    }
+
+    //---------------------------------------------------------
+    // 関数名 : isInsideOrOutside
+    // 機能   : 物体情報が内部にあるかチェック
+    // 引数   : flag/観測点の内部外部値 arr/物体の情報
+    // 戻り値 : true/内部あり false/内部なし
+    //---------------------------------------------------------
+    private bool isInsideOrOutside(int[,] flag, int[,] arr)
+    {
+        int m_x = GlobalVar.CAMERA_WIDTH / GlobalVar.POINT_INTERVAL;
+        int m_y = GlobalVar.CAMERA_HEIGHT / GlobalVar.POINT_INTERVAL;
+
+        for (int y = 0; y < m_y; y++)
+        {
+            for (int x = 0; x < m_x; x++)
+            {
+                if (flag[y,x] == 2 && arr[y,x] == 2)
+                {
+                    flag[y,x] = 3;
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    //---------------------------------------------------------
+    // 関数名 : printIDot
+    // 機能   : 図形内部の点を描画
+    // 引数   : img/画像 gx/X座標 gy/Y座標
+    // 戻り値 : img/画像
+    //---------------------------------------------------------
+    unsafe private IplImage printIDot(IplImage img, double gx, double gy)
+    {
+        double index;
+
+        byte* pxe = (byte*)img.ImageData;
+
+        for (int y_ad = -1; y_ad <= 1; y_ad++)
+        {
+            for (int x_ad = -1; x_ad <= 1; x_ad++)
+            {
+                index = (GlobalVar.CAMERA_WIDTH * 3) * (int)(gy + y_ad) + ((int)(gx + x_ad) * 3);
+                pxe[(int)index] = 0;
+                pxe[(int)index + 1] = 100;
+                pxe[(int)index + 2] = 255;
+            }
+        }
+
+        return img;
+    }
+
+    /*
+    unsafe private IplImage printSDot(IplImage img, double gx, double gy, int flag)
+    {
+        double index;
+
+        byte* pxe = (byte*)img.ImageData;
+
+        for (int y_ad = -1; y_ad <= 1; y_ad++)
+        {
+            for (int x_ad = -1; x_ad <= 1; x_ad++)
+            {
+                index = (GlobalVar.CAMERA_WIDTH * 3) * (int)(gy + y_ad) + ((int)(gx + x_ad) * 3);
+
+                if (flag == 1 && x_ad == 0 && y_ad == 0)
+                {
+
+                    pxe[(int)index] = 255;
+                    pxe[(int)index + 1] = 255;
+                    pxe[(int)index + 2] = 255;
+                }
+                else
+                {
+                    pxe[(int)index] = 0;
+                    pxe[(int)index + 1] = 255;
+                    pxe[(int)index + 2] = 0;
+                }
+            }
+        }
+        return img;
+    }
+    */
+
+    //---------------------------------------------------------
+    // 関数名 : printFigureData
+    // 機能   : 図形を描画
+    // 引数   : img/画像 v/座標配列
+    // 戻り値 : img/画像
+    //---------------------------------------------------------
+    unsafe private IplImage printFigureData(IplImage img, ArrayList v)
     {
         double index;
         byte* pxe = (byte*)img.ImageData;
 
-        for (int i = 0; i < v.Count - 1; i++)
+        for (int i = 0; i < v.Count; i++)
         {
             Complex com = (Complex)v[i];
 
@@ -430,6 +599,12 @@ public class Main : MonoBehaviour {
         return img;
     }
 
+    //---------------------------------------------------------
+    // 関数名 : printPointData
+    // 機能   : 物体を描画
+    // 引数   : img/画像 arr/物体配列
+    // 戻り値 : img/画像
+    //---------------------------------------------------------
     unsafe private IplImage printPointData(IplImage img, int[,] arr)
     {
         int index, x_tmp, y_tmp;
@@ -447,7 +622,7 @@ public class Main : MonoBehaviour {
                         x_tmp = (x - (GlobalVar.POINT_INTERVAL / 2)) / GlobalVar.POINT_INTERVAL;
                         y_tmp = (y - (GlobalVar.POINT_INTERVAL / 2)) / GlobalVar.POINT_INTERVAL;
 
-                        if (arr[y_tmp, x_tmp] == 1)
+                        if (arr[y_tmp, x_tmp] == 2)
                         {
                             pxe[index] = 0;
                             pxe[index + 1] = 0;
@@ -460,47 +635,38 @@ public class Main : MonoBehaviour {
 
         return img;
     }
-    
+
     // デバッグ用
-    unsafe private IplImage printNearCenterDot(IplImage img, int[] arr)
+    unsafe private IplImage printIODMonitoringPoint(IplImage img, int[,] flag)
     {
-        int index;
+        int index, x, y;
         byte* pxe = (byte*)img.ImageData;
 
-        for (int y_ad = 0; y_ad <= 1; y_ad++)
+        for (int py = 0; py < GlobalVar.CAMERA_HEIGHT / GlobalVar.POINT_INTERVAL; py++)
         {
-            for (int x_ad = 0; x_ad <= 1; x_ad++)
+            for (int px = 0; px < GlobalVar.CAMERA_WIDTH / GlobalVar.POINT_INTERVAL; px++)
             {
-                index = (GlobalVar.CAMERA_WIDTH * 3) * (arr[1] + y_ad) + ((arr[0] + x_ad) * 3);
-                pxe[index] = 0;
-                pxe[index + 1] = 255;
-                pxe[index + 2] = 0;
+                x = px * GlobalVar.POINT_INTERVAL + 5;
+                y = py * GlobalVar.POINT_INTERVAL + 5;
+
+                for (int y_ad = 0; y_ad <= 1; y_ad++)
+                {
+                    for (int x_ad = 0; x_ad <= 1; x_ad++)
+                    {
+                        index = (GlobalVar.CAMERA_WIDTH * 3) * (int)(y + y_ad) + ((int)(x + x_ad) * 3);
+
+                        if (flag[py, px] == 2)
+                        {
+                            pxe[index] = 0;
+                            pxe[index + 1] = 0;
+                            pxe[index + 2] = 255;
+                        }
+                    }
+                }
             }
         }
-
         return img;
     }
-    
-    // デバッグ用
-    unsafe private IplImage printCenterDot(IplImage img, int[] arr)
-    {
-        int index;
-        byte* pxe = (byte*)img.ImageData;
-
-        for (int y_ad = 0; y_ad <= 1; y_ad++)
-        {
-            for (int x_ad = 0; x_ad <= 1; x_ad++)
-            {
-                index = (GlobalVar.CAMERA_WIDTH * 3) * (arr[1] + y_ad) + ((arr[0] + x_ad) * 3);
-                pxe[index] = 0;
-                pxe[index + 1] = 0;
-                pxe[index + 2] = 255;
-            }
-        }
-
-        return img;
-    }
-
 
 
 

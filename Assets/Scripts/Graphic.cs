@@ -107,7 +107,7 @@ class Graphic
         // 青以外
         else
         {
-            arr[(y / GlobalVar.POINT_INTERVAL), (x / GlobalVar.POINT_INTERVAL)] = 1;
+            arr[(y / GlobalVar.POINT_INTERVAL), (x / GlobalVar.POINT_INTERVAL)] = 2;
         }
     }
 
